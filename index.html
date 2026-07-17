@@ -37,7 +37,7 @@
             <button onclick="handleLogout()" class="bg-gray-700 hover:bg-gray-600 text-sm px-4 py-2 rounded transition">Sair</button>
         </header>
 
-        <!-- CARTÕES MÈTRICOS -->
+        <!-- CARTÕES MÉTRICOS -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <div class="bg-gray-800 p-6 rounded-lg border border-gray-700">
                 <p class="text-gray-400 text-sm font-medium">A Receber (Pendente)</p>
@@ -58,8 +58,13 @@
             <h3 class="text-lg font-bold mb-4 text-blue-400">Cadastrar Novo Recebimento</h3>
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <input type="text" id="formCliente" placeholder="Nome do Cliente" class="p-2 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:border-blue-500">
-                <input type="text" id="formContato" placeholder="WhatsApp / Contato" class="p-2 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:border-blue-500">
-                <input type="number" id="formValor" placeholder="Valor (R$)" class="p-2 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:border-blue-500">
+                
+                <!-- Input de Contato com máscara aplicada no input evento -->
+                <input type="text" id="formContato" placeholder="(85) 99999-9999" maxlength="15" oninput="maskWhatsApp(this)" class="p-2 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:border-blue-500">
+                
+                <!-- Input de Valor alterado para tipo texto para aceitar a formatação R$ em tempo real -->
+                <input type="text" id="formValor" placeholder="R$ 0,00" oninput="maskMoney(this)" class="p-2 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:border-blue-500">
+                
                 <input type="date" id="formVencimento" class="p-2 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:border-blue-500">
             </div>
             <button onclick="createNewRecord()" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2 rounded transition">Salvar Lançamento</button>
@@ -92,7 +97,6 @@
     </div>
 
     <script>
-        // COLE AQUI A URL DE IMPLANTAÇÃO GERADA PELO GOOGLE APPS SCRIPT
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxGPvyFic5j-1Q72Xoju1HW58lh-hYRBmRvIlX6V6UIEiboyM6QFzn2uzgq__4M38SG/exec";
 
         let currentUser = JSON.parse(localStorage.getItem("saas_user")) || null;
@@ -100,6 +104,28 @@
         window.onload = function() {
             if (currentUser) { showDashboard(); }
         };
+
+        // MÁSCARA DINÂMICA: WhatsApp / Contato -> (##) #########
+        function maskWhatsApp(input) {
+            let v = input.value.replace(/\D/g, "");
+            v = v.replace(/^(\d{2})(\d)/g, "($1) $2");
+            v = v.replace(/(\d)(\d{4})$/, "$1-$2");
+            input.value = v;
+        }
+
+        // MÁSCARA DINÂMICA: Valor monetário em tempo real -> R$ 1.234,56
+        function maskMoney(input) {
+            let v = input.value.replace(/\D/g, "");
+            v = (v / 100).toFixed(2) + "";
+            v = v.replace(".", ",");
+            v = v.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
+            input.value = "R$ " + v;
+        }
+
+        // Função utilitária para exibir valores monetários no padrão pt-BR nas tabelas/cards
+        function formatToBRL(value) {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+        }
 
         async function handleLogin() {
             const user = document.getElementById("emailInput").value;
@@ -180,16 +206,19 @@
                 let badgeColor = "bg-green-600";
                 let statusLabel = "Em dia";
 
+                // Tratando strings formatadas vindas da planilha antiga, caso necessário
+                let cleanValue = typeof rec.valor === "string" ? parseFloat(rec.valor.replace(/[^\d,-]/g, "").replace(",", ".")) : parseFloat(rec.valor);
+
                 if (rec.status === "Pago") {
                     badgeColor = "bg-blue-600";
                     statusLabel = "Liquidado";
-                    sumPago += parseFloat(rec.valor);
+                    sumPago += cleanValue;
                 } else {
-                    sumPendente += parseFloat(rec.valor);
+                    sumPendente += cleanValue;
                     if (diffDays < 0) {
                         badgeColor = "bg-red-600";
                         statusLabel = `Atrasado (${Math.abs(diffDays)}d)`;
-                        sumAtrasado += parseFloat(rec.valor);
+                        sumAtrasado += cleanValue;
                     } else if (diffDays <= 5) {
                         badgeColor = "bg-orange-500";
                         statusLabel = `Vence em ${diffDays}d`;
@@ -198,33 +227,38 @@
                     }
                 }
 
+                // Aplicação da formatação local na renderização da tabela
                 tableBody.innerHTML += `
                     <tr class="hover:bg-gray-750 transition">
                         <td class="p-3 font-mono text-sm text-gray-400">${rec.id}</td>
                         <td class="p-3 font-medium text-white">${rec.cliente}</td>
                         <td class="p-3 text-gray-300">${rec.contato}</td>
-                        <td class="p-3 text-white font-semibold">R$ ${parseFloat(rec.valor).toFixed(2)}</td>
+                        <td class="p-3 text-white font-semibold">${formatToBRL(cleanValue)}</td>
                         <td class="p-3 text-gray-300">${rec.vencimento.split('-').reverse().join('/')}</td>
                         <td class="p-3"><span class="${badgeColor} text-xs font-bold px-2 py-1 rounded text-white">${statusLabel}</span></td>
                     </tr>
                 `;
             });
 
-            document.getElementById("cardA_Receber").innerText = `R$ ${sumPendente.toFixed(2)}`;
-            document.getElementById("cardAtrasado").innerText = `R$ ${sumAtrasado.toFixed(2)}`;
-            document.getElementById("cardPago").innerText = `R$ ${sumPago.toFixed(2)}`;
+            // Atualização dos cartões superiores formatados
+            document.getElementById("cardA_Receber").innerText = formatToBRL(sumPendente);
+            document.getElementById("cardAtrasado").innerText = formatToBRL(sumAtrasado);
+            document.getElementById("cardPago").innerText = formatToBRL(sumPago);
         }
 
         async function createNewRecord() {
             const cliente = document.getElementById("formCliente").value;
             const contato = document.getElementById("formContato").value;
-            const valor = document.getElementById("formValor").value;
+            let valorRaw = document.getElementById("formValor").value;
             const vencimento = document.getElementById("formVencimento").value;
 
-            if(!cliente || !valor || !vencimento) {
+            if(!cliente || !valorRaw || !vencimento) {
                 alert("Preencha todos os campos obrigatórios.");
                 return;
             }
+
+            // Converte o valor "R$ 100,00" para número decimal "100.00" antes de enviar para o backend
+            let valorLimpo = parseFloat(valorRaw.replace(/[^\d,-]/g, "").replace(",", "."));
 
             let res = await fetch(WEB_APP_URL, {
                 method: "POST",
@@ -234,13 +268,18 @@
                     auth_pass: currentUser.pass,
                     cliente: cliente,
                     contato: contato,
-                    valor: valor,
+                    valor: valorLimpo,
                     vencimento: vencimento
                 })
             });
             let data = await res.json();
             if(data.success) {
                 alert(data.msg);
+                // Limpa campos do formulário
+                document.getElementById("formCliente").value = "";
+                document.getElementById("formContato").value = "";
+                document.getElementById("formValor").value = "";
+                document.getElementById("formVencimento").value = "";
                 loadDashboardData();
             } else {
                 alert(data.error);
