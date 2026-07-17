@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SaaS Hub de Vencimentos</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
+
+    <!-- 1. TELA DE LOGIN -->
+    <div id="loginSection" class="flex flex-col items-center justify-center min-h-screen px-4">
+        <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-md border border-gray-700">
+            <h2 class="text-2xl font-bold mb-6 text-center text-blue-400">SaaS Finanças - Login</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">E-mail</label>
+                    <input type="email" id="emailInput" class="w-full p-2.5 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Senha</label>
+                    <input type="password" id="passInput" class="w-full p-2.5 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:border-blue-500">
+                </div>
+                <button onclick="handleLogin()" class="w-full bg-blue-600 hover:bg-blue-700 font-medium py-2.5 rounded transition">Entrar no Sistema</button>
+                <p id="loginError" class="text-red-400 text-sm text-center hidden"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. PAINEL PRINCIPAL (SÓ APARECE LOGADO) -->
+    <div id="mainDashboard" class="container mx-auto p-4 max-w-6xl hidden">
+        <header class="flex justify-between items-center mb-8 border-b border-gray-800 pb-4">
+            <div>
+                <h1 class="text-2xl font-bold text-white">Hub de Controle Financeiro</h1>
+                <p id="userInfo" class="text-sm text-gray-400"></p>
+            </div>
+            <button onclick="handleLogout()" class="bg-gray-700 hover:bg-gray-600 text-sm px-4 py-2 rounded transition">Sair</button>
+        </header>
+
+        <!-- CARTÕES MÈTRICOS -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700">
+                <p class="text-gray-400 text-sm font-medium">A Receber (Pendente)</p>
+                <p id="cardA_Receber" class="text-3xl font-bold text-yellow-400">R$ 0,00</p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700">
+                <p class="text-gray-400 text-sm font-medium">Total Inadimplente</p>
+                <p id="cardAtrasado" class="text-3xl font-bold text-red-500">R$ 0,00</p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700">
+                <p class="text-gray-400 text-sm font-medium">Total Liquidado (Pago)</p>
+                <p id="cardPago" class="text-3xl font-bold text-green-500">R$ 0,00</p>
+            </div>
+        </div>
+
+        <!-- FORMULÁRIO DE REGISTRO (APENAS PARA ADMIN) -->
+        <div id="adminFormSection" class="bg-gray-800 p-6 rounded-lg border border-gray-700 mb-8 hidden">
+            <h3 class="text-lg font-bold mb-4 text-blue-400">Cadastrar Novo Recebimento</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <input type="text" id="formCliente" placeholder="Nome do Cliente" class="p-2 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:border-blue-500">
+                <input type="text" id="formContato" placeholder="WhatsApp / Contato" class="p-2 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:border-blue-500">
+                <input type="number" id="formValor" placeholder="Valor (R$)" class="p-2 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:border-blue-500">
+                <input type="date" id="formVencimento" class="p-2 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:border-blue-500">
+            </div>
+            <button onclick="createNewRecord()" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2 rounded transition">Salvar Lançamento</button>
+        </div>
+
+        <!-- TABELA DE REGISTROS -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+            <div class="p-4 bg-gray-750 font-bold border-b border-gray-700 flex justify-between items-center">
+                <span>Lançamentos da Empresa</span>
+                <button onclick="loadDashboardData()" class="text-sm bg-gray-700 hover:bg-gray-600 py-1 px-3 rounded">Atualizar Dados</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-700 text-gray-300 text-sm uppercase">
+                            <th class="p-3">ID</th>
+                            <th class="p-3">Cliente</th>
+                            <th class="p-3">Contato</th>
+                            <th class="p-3">Valor</th>
+                            <th class="p-3">Vencimento</th>
+                            <th class="p-3">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-gray-700">
+                        <!-- Gerado Dinamicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // COLE AQUI A URL DE IMPLANTAÇÃO GERADA PELO GOOGLE APPS SCRIPT
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxGPvyFic5j-1Q72Xoju1HW58lh-hYRBmRvIlX6V6UIEiboyM6QFzn2uzgq__4M38SG/exec";
+
+        let currentUser = JSON.parse(localStorage.getItem("saas_user")) || null;
+
+        window.onload = function() {
+            if (currentUser) { showDashboard(); }
+        };
+
+        async function handleLogin() {
+            const user = document.getElementById("emailInput").value;
+            const pass = document.getElementById("passInput").value;
+            const errorElement = document.getElementById("loginError");
+
+            errorElement.classList.add("hidden");
+
+            try {
+                let res = await fetch(WEB_APP_URL, {
+                    method: "POST",
+                    body: JSON.stringify({ action: "login", auth_user: user, auth_pass: pass })
+                });
+                let data = await res.json();
+
+                if (data.success) {
+                    currentUser = { email: user, pass: pass, ...data.user };
+                    localStorage.setItem("saas_user", JSON.stringify(currentUser));
+                    showDashboard();
+                } else {
+                    errorElement.innerText = data.error;
+                    errorElement.classList.remove("hidden");
+                }
+            } catch (err) {
+                errorElement.innerText = "Erro ao conectar com o servidor.";
+                errorElement.classList.remove("hidden");
+            }
+        }
+
+        function showDashboard() {
+            document.getElementById("loginSection").classList.add("hidden");
+            document.getElementById("mainDashboard").classList.remove("hidden");
+            document.getElementById("userInfo").innerText = `Logado como: ${currentUser.email} (${currentUser.nivel}) | Escopo: ${currentUser.empresaId}`;
+            
+            if (currentUser.nivel === "Admin") {
+                document.getElementById("adminFormSection").classList.remove("hidden");
+            }
+            loadDashboardData();
+        }
+
+        async function loadDashboardData() {
+            const tableBody = document.getElementById("tableBody");
+            tableBody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-400">Carregando registros...</td></tr>`;
+
+            try {
+                let res = await fetch(WEB_APP_URL, {
+                    method: "POST",
+                    body: JSON.stringify({ action: "fetch", auth_user: currentUser.email, auth_pass: currentUser.pass })
+                });
+                let result = await res.json();
+
+                if (result.success) {
+                    renderTable(result.data);
+                }
+            } catch(e) {
+                tableBody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-red-400">Erro ao carregar dados.</td></tr>`;
+            }
+        }
+
+        function renderTable(records) {
+            const tableBody = document.getElementById("tableBody");
+            tableBody.innerHTML = "";
+
+            let sumPendente = 0, sumAtrasado = 0, sumPago = 0;
+            const hoje = new Date();
+            hoje.setHours(0,0,0,0);
+
+            if(records.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500">Nenhum registro encontrado para esta organização.</td></tr>`;
+                return;
+            }
+
+            records.forEach(rec => {
+                const venc = new Date(rec.vencimento + "T00:00:00");
+                const diffTime = venc - hoje;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                let badgeColor = "bg-green-600";
+                let statusLabel = "Em dia";
+
+                if (rec.status === "Pago") {
+                    badgeColor = "bg-blue-600";
+                    statusLabel = "Liquidado";
+                    sumPago += parseFloat(rec.valor);
+                } else {
+                    sumPendente += parseFloat(rec.valor);
+                    if (diffDays < 0) {
+                        badgeColor = "bg-red-600";
+                        statusLabel = `Atrasado (${Math.abs(diffDays)}d)`;
+                        sumAtrasado += parseFloat(rec.valor);
+                    } else if (diffDays <= 5) {
+                        badgeColor = "bg-orange-500";
+                        statusLabel = `Vence em ${diffDays}d`;
+                    } else {
+                        statusLabel = `Vence em ${diffDays}d`;
+                    }
+                }
+
+                tableBody.innerHTML += `
+                    <tr class="hover:bg-gray-750 transition">
+                        <td class="p-3 font-mono text-sm text-gray-400">${rec.id}</td>
+                        <td class="p-3 font-medium text-white">${rec.cliente}</td>
+                        <td class="p-3 text-gray-300">${rec.contato}</td>
+                        <td class="p-3 text-white font-semibold">R$ ${parseFloat(rec.valor).toFixed(2)}</td>
+                        <td class="p-3 text-gray-300">${rec.vencimento.split('-').reverse().join('/')}</td>
+                        <td class="p-3"><span class="${badgeColor} text-xs font-bold px-2 py-1 rounded text-white">${statusLabel}</span></td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById("cardA_Receber").innerText = `R$ ${sumPendente.toFixed(2)}`;
+            document.getElementById("cardAtrasado").innerText = `R$ ${sumAtrasado.toFixed(2)}`;
+            document.getElementById("cardPago").innerText = `R$ ${sumPago.toFixed(2)}`;
+        }
+
+        async function createNewRecord() {
+            const cliente = document.getElementById("formCliente").value;
+            const contato = document.getElementById("formContato").value;
+            const valor = document.getElementById("formValor").value;
+            const vencimento = document.getElementById("formVencimento").value;
+
+            if(!cliente || !valor || !vencimento) {
+                alert("Preencha todos os campos obrigatórios.");
+                return;
+            }
+
+            let res = await fetch(WEB_APP_URL, {
+                method: "POST",
+                body: JSON.stringify({
+                    action: "create",
+                    auth_user: currentUser.email,
+                    auth_pass: currentUser.pass,
+                    cliente: cliente,
+                    contato: contato,
+                    valor: valor,
+                    vencimento: vencimento
+                })
+            });
+            let data = await res.json();
+            if(data.success) {
+                alert(data.msg);
+                loadDashboardData();
+            } else {
+                alert(data.error);
+            }
+        }
+
+        function handleLogout() {
+            localStorage.removeItem("saas_user");
+            location.reload();
+        }
+    </script>
+</body>
+</html>
